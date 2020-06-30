@@ -1,0 +1,209 @@
+/*
+This script display a correlation image in the region of interest
+Furthermore it also calculates the average correlation according to several subdivided
+areas. The areas are divided according to precipitation, elevation, land use and soil moisture
+*/
+
+//-------------------------------------------------------------------------//
+//                            Data Inputs                                  //
+//-------------------------------------------------------------------------//
+
+var corrimage = ee.Image("users/felipef93/Correlations/corr278") //Correlation image used
+var state = ['California'];//Define region of interest here
+
+//-------------------------------------------------------------------------//
+//                              Display                                    //
+//-------------------------------------------------------------------------//
+
+
+var usstate = ee.FeatureCollection("TIGER/2018/States");//us state vector
+var stateshape = usstate.filter(ee.Filter.inList('NAME', state));// us state
+var roi = stateshape.geometry();// us state
+var roiLayer = ui.Map.Layer(roi, {color: 'FF0000'}, 'roi');
+Map.layers().add(roiLayer);//display roi
+
+var band_viz = {
+  min:-1,
+  max: 1,
+  opacity: 1.0,
+  palette: ["red", "white", "blue"]
+};
+Map.addLayer(corrimage.select('correlation'), band_viz, 'Correlation'); //Display corr
+
+
+
+var clip = function(image){
+  var clipped = image.clipToCollection(stateshape);
+  return clipped;//Clip images to region of interest
+};
+
+
+//-------------------------------------------------------------------------//
+//                             Precipitation:							   //
+//-------------------------------------------------------------------------//
+
+var averageclimate = ee.ImageCollection("OREGONSTATE/PRISM/Norm81m");
+var montlhyp = averageclimate.select('ppt').map(clip);
+var yp = montlhyp.sum();
+
+var p1800 = yp.gte(1600).selfMask().clamp(1800,1800).unmask(0);
+var p1600 = yp.gte(1600).or(yp.lt(1200)).not().selfMask().clamp(1600,1600).unmask(0);
+var p1200 = yp.gte(1200).or(yp.lt(800)).not().selfMask().clamp(1200,1200).unmask(0);
+var p800 = yp.gte(800).or(yp.lt(600)).not().selfMask().clamp(800,800).unmask(0);
+var p600 =yp.gte(600).or(yp.lt(400)).not().selfMask().clamp(600,600).unmask(0);
+var p400 = yp.gte(400).or(yp.lt(300)).not().selfMask().clamp(400,400).unmask(0);
+var p300 = yp.gte(300).or(yp.lt(200)).not().selfMask().clamp(300,300).unmask(0);
+var p200 =yp.gte(300).or(yp.lt(200)).not().selfMask().clamp(200,200).unmask(0);
+var p100=yp.gte(200).or(yp.lt(100)).not().selfMask().clamp(100,100).unmask(0);
+var p99= yp.lt(100).selfMask().clamp(99,99).unmask(0);
+
+var pcategory =p1800.add(p1600).add(p1200).add(p800).add(p600).add(p400).add(p300).add(p200).add(p100).add(p99).selfMask();
+
+var corrp = corrimage.select('correlation').addBands(pcategory);
+var mean_corrp = corrp.reduceRegion({
+  reducer: ee.Reducer.mean().group({
+    groupField: 1,
+    groupName: 'precipitation',
+  }),
+  geometry: roi,
+  scale: 1000,
+  maxPixels: 1e8
+});
+
+var groupsp = ee.List(mean_corrp.get('groups'));
+
+var fp = ee.FeatureCollection(groupsp.map(function(obj) {
+  var object = ee.Dictionary(obj);
+  var name = ee.String(object.get('precipitation'));
+  var corr = ee.Number(object.get('mean'));
+  
+  return ee.Feature(null, {'precipitation':name, 'Correlation':corr,});
+}));
+
+print('Image correlation by precipitation class', fp);
+
+
+//-------------------------------------------------------------------------//
+//                             Elevation:							       //
+//-------------------------------------------------------------------------//
+
+var e = ee.Image("USGS/SRTMGL1_003").clipToCollection(stateshape);
+var e3000 = e.gte(3000).selfMask().clamp(3000,3000).unmask(0);
+var e2500 = e.gte(3000).or(e.lt(2500)).not().selfMask().clamp(2500,2500).unmask(0);
+var e2000 = e.gte(2500).or(e.lt(2000)).not().selfMask().clamp(2000,2000).unmask(0);
+var e1500 = e.gte(1500).or(e.lt(1000)).not().selfMask().clamp(1500,1500).unmask(0);
+var e1000 = e.gte(1000).or(e.lt(600)).not().selfMask().clamp(1000,1000).unmask(0);
+var e600 = e.gte(600).or(e.lt(200)).not().selfMask().clamp(600,600).unmask(0);
+var e200 = e.gte(200).or(e.lt(1)).not().selfMask().clamp(200,200).unmask(0);
+var e1 = yp.lt(1).selfMask().clamp(1,1).unmask(0);
+
+var elevation = e3000.add(e2500).add(e2000).add(e1500).add(e1000).add(e600).add(e200).add(e1).selfMask();
+
+var corre = corrimage.select('correlation').addBands(elevation);
+
+var mean_corre = corre.reduceRegion({
+  reducer: ee.Reducer.mean().group({
+    groupField: 1,
+    groupName: 'elevation',
+  }),
+  geometry: roi,
+  scale: 1000,
+  maxPixels: 1e8
+});
+var groupse = ee.List(mean_corre.get('groups'));
+
+var fe = ee.FeatureCollection(groupse.map(function(obj) {
+  var object = ee.Dictionary(obj);
+  var name = ee.String(object.get('elevation'));
+  var corr = ee.Number(object.get('mean'));
+  
+  return ee.Feature(null, {'elevation':name, 'Correlation':corr,});
+}));
+
+print('Image correlation by elevation class',fe);
+
+
+//-------------------------------------------------------------------------//
+//                             Landcover:							       //
+//-------------------------------------------------------------------------//
+var landcover = ee.Image("USGS/NLCD/NLCD2016").select('landcover');
+
+var shrub = landcover.eq(52).selfMask().clamp(52,52).unmask(0);
+var grassland = landcover.eq(71).selfMask().clamp(71,71).unmask(0);
+var dec_forest = landcover.eq(41).selfMask().clamp(41,41).unmask(0);
+var ev_forest = landcover.eq(42).selfMask().clamp(42,42).unmask(0);
+var barren_land = landcover.eq(31).selfMask().clamp(31,31).unmask(0);
+var crops = landcover.eq(82).selfMask().clamp(82,82).unmask(0);
+var genforest = landcover.eq(43).selfMask().clamp(43,43).unmask(0);
+
+var land = shrub.add(grassland).add(dec_forest).add(ev_forest).add(barren_land).add(crops).add(genforest).selfMask();
+
+var corrl = corrimage.select('correlation').addBands(land);
+var mean_corrl = corrl.reduceRegion({
+  reducer: ee.Reducer.mean().group({
+    groupField: 1,
+    groupName: 'landcover',
+  }),
+  geometry: roi,
+  scale: 1000,
+  maxPixels: 1e8
+});
+var groupsl = ee.List(mean_corrl.get('groups'));
+var fl = ee.FeatureCollection(groupsl.map(function(obj) {
+  var object = ee.Dictionary(obj);
+  var name = ee.String(object.get('landcover'));
+  var corr = ee.Number(object.get('mean'));
+  
+  return ee.Feature(null, {'landcover':name, 'Correlation':corr,});
+}));
+
+print('Image correlation by landcover class','check USGS/NLCD/NLCD2016 or code','for number-> vegetation type conversion',fl);
+
+
+
+//-------------------------------------------------------------------------//
+//                            Soil moisture:						       //
+//-------------------------------------------------------------------------//
+
+
+var dataset=ee.ImageCollection('NASA/FLDAS/NOAH01/C/GL/M/V001')
+              .filter(ee.Filter.calendarRange(1984,2018,'year'))
+.filter(ee.Filter.calendarRange(2,2,'month'));
+
+var meanmonth = dataset.mean();
+
+var sb = meanmonth.select("SoilMoi10_40cm_tavg").rename('soil_moisture').clipToCollection(stateshape);
+
+var sm10 = sb.gte(0.45).selfMask().clamp(45,45).unmask(0);
+var sm9 = sb.gte(0.45).or(sb.lt(0.40)).not().selfMask().clamp(4,4).unmask(0);
+var sm8 = sb.gte(0.40).or(sb.lt(0.35)).not().selfMask().clamp(35,35).unmask(0);
+var sm7 = sb.gte(0.35).or(sb.lt(0.30)).not().selfMask().clamp(30,30).unmask(0);
+var sm6 = sb.gte(0.30).or(sb.lt(0.25)).not().selfMask().clamp(25,25).unmask(0);
+var sm5 = sb.gte(0.25).or(sb.lt(0.20)).not().selfMask().clamp(20,20).unmask(0);
+var sm4 = sb.gte(0.20).or(sb.lt(0.15)).not().selfMask().clamp(15,15).unmask(0);
+var sm3 = sb.gte(0.15).or(sb.lt(0.10)).not().selfMask().clamp(10,10).unmask(0);
+var sm2 = sb.gte(0.10).or(sb.lt(0.05)).not().selfMask().clamp(5,5).unmask(0);
+var sm1 = sb.lt(0.05).selfMask().clamp(1,1).unmask(0);
+
+var soil = sm10.add(sm9).add(sm8).add(sm7).add(sm6).add(sm5).add(sm4).add(sm3).add(sm2).add(sm1).selfMask();
+
+var corrs = corrimage.select('correlation').addBands(soil);
+var mean_corrs = corrs.reduceRegion({
+  reducer: ee.Reducer.mean().group({
+    groupField: 1,
+    groupName: 'soil_moisture',
+  }),
+  geometry: roi,
+  scale: 1000,
+  maxPixels: 1e8
+});
+var groupss = ee.List(mean_corrs.get('groups'));
+var fl = ee.FeatureCollection(groupss.map(function(obj) {
+  var object = ee.Dictionary(obj);
+  var name = ee.String(object.get('soil_moisture'));
+  var corr = ee.Number(object.get('mean'));
+  
+  return ee.Feature(null, {'soil_moisture':name, 'Correlation':corr,});
+}));
+
+print('Image correlation by soil moisture',fl);

@@ -1,0 +1,51 @@
+/* 
+This script adds metadata information in the form of bands to an image collection 
+Herein the imagecollection contains R(band1) and P(band2). 
+Each image corresponds to a scenario of varied NDVI lag, NDVI range, SPEI month and SPEI range
+The function will create a band for each variable: NDVIL(B3),NDVIR(B4),SPEIM(B5),SPEIR(B6)
+*/
+var corr = ee.ImageCollection("users/felipef93/Correlations");//Image collection containing R and P values of several scenarios
+var metadata =ee.FeatureCollection("users/felipef93/csv_metadata"); // csv file containing a description of the scenarios
+
+// Function to assign the metadata to the image collection
+var image_meta = function (image){
+  var id = image.id();
+  var corresponding = metadata.filter(ee.Filter.eq('Sim',id));
+  var listed =ee.List(corresponding.toList(45));
+  var feature  =ee.Feature(listed.get(0));
+  //Metadata is imported as a feature
+  var NDVIL = ee.Feature(image.geometry(),{'val':feature.get('NDVI LAG')});
+  var NDVIR =ee.Feature(image.geometry(),{'val':feature.get('NDVI range')});
+  var SPEIM = ee.Feature(image.geometry(),{'val':feature.get('SPEI Month')});
+  var SPEIR = ee.Feature(image.geometry(),{'val':feature.get('SPEI range')});
+  // Metadata transformed to image and then added as a band in corresponding image
+  var NDVILi= ee.FeatureCollection([NDVIL]).reduceToImage(['val'],ee.Reducer.first()).rename('NDVIL');
+  var NDVIRi= ee.FeatureCollection([NDVIR]).reduceToImage(['val'],ee.Reducer.first()).rename('NDVIR');
+  var SPEIMi=ee.FeatureCollection([SPEIM]).reduceToImage(['val'],ee.Reducer.first()).rename('SPEIM');
+  var SPEIRi= ee.FeatureCollection([SPEIR]).reduceToImage(['val'],ee.Reducer.first()).rename('SPEIR');
+  return image.addBands([NDVILi,NDVIRi,SPEIMi,SPEIRi]);
+};
+
+var newimgs = corr.map(image_meta);
+var max = newimgs.reduce(ee.Reducer.max(6)).rename('correlation','p','NDVIL','NDVIR','SPEIM','SPEIR');
+
+//Visualization of best R for each pixel in image
+var band_viz = {
+  min: 0,
+  max: 1,
+  opacity: 1.0,
+  palette: ["red", "yellow", "green"]
+};
+Map.addLayer(max.select('correlation'), band_viz, 'maxcorr');
+
+//Visualization of "best scenario" variable
+
+var band_viz = {
+  min: 1,
+  max: 8,
+  opacity: 1.0,
+  palette: ["red", "yellow", "green"]
+};
+
+Map.addLayer(max.select('SPEIM'), band_viz, 'maxcorr');
+

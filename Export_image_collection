@@ -1,0 +1,144 @@
+/*
+This script is used to export the average correlation and p values of different data
+categories. 
+Firstly, the average correlation and p value for the region is calculated (export 1).
+Then data is divided in 10 different precipitation categories, the average correlation and P 
+for each category is then exported in csv format (export 2).
+*/
+
+//-------------------------------------------------------------------------//
+//                              Data inputs                                //
+//-------------------------------------------------------------------------//
+
+var corr = ee.ImageCollection("users/felipef93/Correlations"); //Image collection containing correlation images
+
+//Definition of region of interest:
+var state = ['California'];//CHANGE the NAME of us state here!
+
+/*Precipitation Divisions
+Divide the precipitation into sub categories, where:
+p10 = locations with precipitation higher than 'value'
+p9 = precipitation higher than 'value' and lower than e10, e8<e9 and so on....
+if less than 10 divisions are needed all vars not used should be populated with 0s
+*/
+var p10 = 1800;
+var p9 = 1600;
+var p8 = 1200;
+var p7 = 1000;
+var p6 = 800;
+var p5 = 600;
+var p4 = 400;
+var p3 = 200;
+var p2 = 100;
+var p1 = 99;
+
+//-------------------------------------------------------------------------//
+//                                  roi                                    //
+//-------------------------------------------------------------------------//
+
+var usstate = ee.FeatureCollection("TIGER/2018/States");//us state vector
+
+var stateshape = usstate.filter(ee.Filter.inList('NAME', state));// us state
+var roi = stateshape.geometry();// us state
+
+
+var clip = function(image){
+  var clipped = image.clipToCollection(stateshape);
+  return clipped;//Function to clip image to roi
+};
+//-------------------------------------------------------------------------//
+//                                 Area Correlation                        //
+//-------------------------------------------------------------------------//
+var roicorr = corr.map(function(image){
+	var reduce = image.reduceRegion(ee.Reducer.mean(),roi);
+return ee.Feature(null,{'id':image.id(), 'corr':reduce})});
+
+Export.table.toDrive(
+  {collection: roicorr,
+  description:'Correlation in study area'}); //Export 1
+
+  
+//-------------------------------------------------------------------------//
+//                                 Precipitation                           //
+//-------------------------------------------------------------------------//
+
+var averageclimate = ee.ImageCollection("OREGONSTATE/PRISM/Norm81m"); //Average monthly precipitation 
+var montlhyp = averageclimate.select('ppt').map(clip); //Clip to roi
+var p = montlhyp.sum();//Average yearly precipitation
+
+//Precipitation categories
+var pc10 = p.gte(p10).selfMask().clamp(p10,p10)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc9 = p.gte(p10).or(p.lt(p9)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc8 = p.gte(p9).or(p.lt(p8)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc7 = p.gte(p8).or(p.lt(p7)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc6 = p.gte(p7).or(p.lt(p6)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc5 = p.gte(p6).or(p.lt(p5)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc4 = p.gte(p5).or(p.lt(p4)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc3 = p.gte(p4).or(p.lt(p3)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc2 = p.gte(p3).or(p.lt(p2)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc1 = p.gte(p2).or(p.lt(p1)).not().selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+var pc0 = p.lt(p1).selfMask().clamp(1,1)
+            .reduceToVectors({geometry: roi, scale: 800, geometryType: 'polygon',});
+
+
+//Creation of a feature collection for each precipitation category
+var corrp10 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc10).reduceRegion(ee.Reducer.mean(),pc10);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p10, 'corr':newimg}) ;
+});
+var corrp9 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc9).reduceRegion(ee.Reducer.mean(),pc9);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p9, 'corr':newimg}) ;
+});
+var corrp8 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc8).reduceRegion(ee.Reducer.mean(),pc8);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p8, 'corr':newimg}) ;
+});
+var corrp7 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc7).reduceRegion(ee.Reducer.mean(),pc7);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p7, 'corr':newimg}) ;
+});
+var corrp6 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc6).reduceRegion(ee.Reducer.mean(),pc6);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p6, 'corr':newimg}) ;
+});
+var corrp5 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc5).reduceRegion(ee.Reducer.mean(),pc5);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p5, 'corr':newimg}) ;
+});
+var corrp4 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc4).reduceRegion(ee.Reducer.mean(),pc4);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p4, 'corr':newimg}) ;
+});
+var corrp3 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc3).reduceRegion(ee.Reducer.mean(),pc3);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p3, 'corr':newimg}) ;
+});
+var corrp2 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc2).reduceRegion(ee.Reducer.mean(),pc2);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p2, 'corr':newimg}) ;
+});
+var corrp1 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc1).reduceRegion(ee.Reducer.mean(),pc1);
+  return ee.Feature(null, {'id':image.id(),'precipitation':p1, 'corr':newimg}) ;
+});
+var corrp0 = corr.map(function(image){
+  var newimg= image.select('correlation').clip(pc0).reduceRegion(ee.Reducer.mean(),pc0);
+  return ee.Feature(null, {'id':image.id(),'precipitation':0, 'corr':newimg}) ;
+});
+
+var precipitationcorr = corrp10.merge(corrp9).merge(corrp8).merge(corrp7).merge(corrp6).merge(corrp5).merge(corrp4).merge(corrp3).merge(corrp2); //Merging all feature collections
+
+Export.table.toDrive(
+  {collection: precipitationcorr,
+  description:'Correlation per precipitation class'}); //Export 2
