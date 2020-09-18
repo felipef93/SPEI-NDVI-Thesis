@@ -18,5 +18,7 @@ locatearchives<-function(dir, crop_img=NULL){
     imagespos[[n]]<-max
     imagesneg[[n]]<-min
   }
-  return(test<-list(imagespos,imagesneg)) #Returns 2 lists: one with all pos rasters and the other with all negatives
+  return(test<-list(imagespos,imagesneg)) 
+}
+                      #Returns 2 lists: one with all pos rasters and the other with all negatives
 										  #obs: list within list for each scenario studied

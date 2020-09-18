@@ -7,6 +7,8 @@ library(reshape2) #Melt the data
 library(tmap) #making maps
 library(bannerCommenter) #Organizing my code
 library(dplyr) #Pipes
+library(dunn.test)
+
 
 #############################################################################################################
 ##                          Import shapefiles and rasters for the analysis                                 ##   
@@ -108,6 +110,11 @@ econames<-c("Sonoran Desert","Mojave Basin and Range","Central Basin and Range",
             "Eastern Cascades Slopes and Foothills","Klamath Mountains","Sierra Nevada")
 for (n in 1:2) vectorbyvariable[[n]]$L1<-factor(vectorbyvariable[[n]]$L1, levels=econames) 
 
+#Pallete according to my ecoregions figure in the Background section of my work
+paletteeco<- c("#006d2c","#515151","#fb0000","#00ff83","#b6ffb5","#80342d","#714320","#fff682",
+               "#ff8282","#48600c","#fbe901","#b5ffd8")
+names(paletteeco)<-ecoregions$NA_L3NAME
+
 #HEREIN the raster for the plot are defined, note that: 2 = Positive raster plots; 1=Negative raster plots
 #plots
 p<-ggplot(vectorbyvariable[[1]], aes(x=L3, y=abs(value), fill=L1)) + geom_boxplot(outlier.size=0,outlier.alpha = 0)+
@@ -140,11 +147,6 @@ for (n in 1:4){
 ecofilteredrvector<-map(ecofiltered, map,map,map, as.vector)%>%map(map,map,map,~.x[.x>-1])%>%melt
 ecofilteredrvector<-ecofilteredrvector[ecofilteredrvector$value!=0,]
 
-#Pallete according to my ecoregions figure in the Background section of my work
-paletteeco<- c("#006d2c","#515151","#fb0000","#00ff83","#b6ffb5","#80342d","#714320","#fff682",
-               "#ff8282","#48600c","#fbe901","#b5ffd8")
-names(paletteeco)<-names(percentagefillecoregion[[1]])
-
 #Organizing values according as they appear in my thesis, not in alphabetical order
 ecofilteredrvector$L1<-factor(ecofilteredrvector$L1, levels=c("NDVI_Start","NDVI_Range","SPEI_Range",
                                                               "SPEI_lag"))
@@ -169,3 +171,32 @@ ecopercentage$L3<-as.numeric(str_extract_all(ecopercentage$L3,'[0-9]+'))
 #############################################################################################################
 ##                                   Statistical testing: Different Scenarios                              ##   
 #############################################################################################################
+test<-ecofilteredrvector%>%group_split(L2)
+namess<-c()
+for (n in 1:length(test)) namess[n]<-as.character(unique(test[[n]]$L2))
+names(test)<-namess
+test<-test%>%map(group_split,L1) 
+for (n in 1:length(test)) {
+  sup<-c()
+  for(m in 1:length(test[[n]])){
+    sup[m]<-as.character(unique(test[[n]][[m]]$L1))
+      }
+  names(test[[n]])<-sup
+}
+
+dunn<-list()
+for (n in 1:length(test)){
+  sup<-list()
+  sup2<-c()
+  for(m in 1:length(test[[n]])){
+    if(length(unique(test[[n]][[m]]$L3))>2){
+      sup[[m]]<-as.data.frame(dunn.test(x=test[[n]][[m]]$value,g=test[[n]][[m]]$L3, method = 'bh'))
+      sup2[m]<-as.character(unique(test[[n]][[m]]$L1))
+    }
+  }
+  dunn[[n]]<-sup
+  names(dunn[[n]])<-sup2
+}
+names(dunn)<-namess
+
+
