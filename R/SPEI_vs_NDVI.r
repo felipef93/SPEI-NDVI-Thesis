@@ -12,22 +12,35 @@ library(dunn.test)
 #############################################################################################################
 ##                          Import shapefiles and rasters for the analysis                                 ##   
 #############################################################################################################
-banner("Data inputs")
+#Import of Shapefiles used in the analysis
 setwd("C:/Users/ACER/Desktop/Thesis/")
 california <-st_read("ArcGIS/California.shp") #California shapefile
 ecoregions<-st_read("ArcGIS/Ecoregions Simplified/Ecocal_project.shp") #Ecoregions of California Shapefile
 
-#Import map of highest negative and positive correlations 
+#Import map of highest negative and positive correlations -Section 4.1 of Thesis
 setwd("C:/Users/ACER/Desktop/Thesis/GEE_Exports/Maxmin - All")
 Maxminglob<-sapply(list.files(),raster)
 Maxminglob<-map(Maxminglob,crop,california)
 Maxminglob<-map(Maxminglob,mask,california)
 
+#Import Corresponding best variables to the highest negative and positive correlations - Section 4.1
+setwd("C:/Users/ACER/Desktop/Thesis/GEE_Exports/Maxmin")
 
+Maxmin<-sapply(list.files(),raster) #Reads data From wd
+Maxmin<-map(Maxmin,crop,california) #Crops all data
+for (n in 1:8) Maxmin[[n]][Maxmin[[n]]==0]<--1
+for (n in 1:8) Maxmin[[n]][Maxmin[[n]]==-30]<-0
+Maxmin<-map(Maxmin,mask,california)
+
+#Data for the rest of the analysis - Sections 4.2 and 4.3
 setwd("C:/Users/ACER/Desktop/Thesis/GEE_exports") #location where my maps are
-directories<-grep("NDVI|SPEI",list.dirs(),value= TRUE) #Selection folders with archives consisting of NDVI
-                                                       #and SPEI different scenarios studied
+directories<-grep("NDVI|SPEI",list.dirs(),value= TRUE) #Selection folders with archives consisting of NDVI                                                       #and SPEI different scenarios studied
 directories<-gsub("./","",directories)
+#Import raster of correlation, separated by positive and negative correlations
+myrasters<-locatearchives(directories,california) #Import function
+names(myrasters)<-c("positive","negative") #Naming components of list
+namesof<-mapply(names,myrasters[[2]])%>%map(rev)%>%str_extract_all('[0-9]+') #Each possible scenario, 
+#represented in months
 
 #For plotting maps, this is the framing of the region
 bbox_cal<-st_bbox(california)
@@ -38,15 +51,9 @@ bbox_cal[3] <- bbox_cal[3] + (0.05 * xrange) # xmax - right
 bbox_cal[2] <- bbox_cal[2] - (0.05 * yrange) # ymin - bottom
 bbox_cal[4] <- bbox_cal[4] + (0.05 * yrange) # ymax - top
 
-#Import raster of correlation, separated by positive and negative correlations
-myrasters<-locatearchives(directories,california) #Import function
-names(myrasters)<-c("positive","negative") #Naming components of list
-namesof<-mapply(names,myrasters[[2]])%>%map(rev)%>%str_extract_all('[0-9]+') #Each possible scenario, 
-                                                                             #represented in months
 #############################################################################################################
 ##                                Plot of best R values of correlations                                    ##   
 #############################################################################################################
-
 #Creates a shape that is the inverse of the locations where  there is a correlation
 #Positive
 locationspos<-Maxminglob[[2]]
@@ -83,6 +90,44 @@ intersection<-mask(Maxminglob[[1]],Maxminglob[[2]])
 #############################################################################################################
 ##                            Plot of best scenarios for best correlations                                 ##   
 #############################################################################################################
+#Plots of percentage of best correlation for each corresponding scenario
+valu<-map(Maxmin,getValues) #Get values from the maps
+val<-map(valu,table) #"count" number of pizels for each scenarios
+perctot<-list() #initialize list for percentage with No corr values
+perc<-list() #Initialize list for percentage without corr values
+everything<-list()
+names(val)<-c("p NDVI month", "p NDVI Range","p SPEI lag", "p SPEI Range","n SPEI Range","n NDVI month", "n NDVI Range","n SPEI lag")
+for (n in 1:8) {
+  val[[n]]<-val[[n]]
+  if (n%%2==0) names(val[[n]])<- paste(names(val[[n]]),"m")
+  if (n==1|n==5) names(val[[n]])<- c("No corr", "March","April","May") 
+  if (n==3|n==7) names(val[[n]])<- paste(names(val[[n]]),"m lag")
+  names(val[[n]])[1]<-"No corr"
+  perctot[[n]]<-val[[n]]/(sum(val[[n]]))
+  perc[[n]]<-100*(val[[n]]/(sum(val[[n]])-val[[n]][[1]]))
+  everything[[n]]<-data.frame(val[n],perc[n],perctot[n])
+}
+
+plot_percentage<-lapply(everything, function(n)
+{p<-ggplot(data=n,aes(x=as.character(.data[['Var1']]),y=n[[4]]))+geom_bar(stat='identity')})
+
+#Plots of maps for best variables in each pixel of the image
+palleteval<-c('#969696','#feebe2','#fcc5c0','#fa9fb5','#f768a1','#c51b8a','#7a0177') #palette shade purple
+maps<-list()
+for (n in 1:8){maps[[n]]<-tm_shape(Maxmin[[n]],bbox=bbox_cal)+tm_raster(style = "fixed", 
+                      breaks=c(-2,unique(Maxmin[[n]])+1),labels = names(val[[n]]),palette =palleteval)+
+  tm_shape(california)+tm_borders()+
+  if(n>4){tm_layout(legend.position=c('RIGHT','TOP'), legend.title.color='white',sepia.intensity=0.5)}
+else if(n==3){tm_compass(type = "arrow", position = c("left", "bottom"))+
+    tm_scale_bar(breaks = c(0, 100,200,300), text.size = 1, position=c("center","bottom"))+
+    tm_layout(legend.show=FALSE,sepia.intensity=0.5)}    
+else {tm_layout(legend.show=FALSE,sepia.intensity=0.5)}
+}
+
+#Discussion
+disc1<-(table(valu$posNDVIM.tif==5 & valu$posSPEIL.tif==12)/val[[5]][['May']])
+disc2<-(table(valu$posNDVIR.tif==12 & valu$posSPEIL.tif==12)/val[[6]][['12 m']])
+disc3<-(table(valu$posSPEIR.tif==1 & valu$posSPEIL.tif==12)/val[[7]][['12 m lag']])
 
 #############################################################################################################
 ##                              Plot unique locations and common locations                                 ##   
