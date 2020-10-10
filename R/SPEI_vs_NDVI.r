@@ -67,11 +67,11 @@ nodataneg<- locationsneg%>%mask(california)%>%mask(Maxminglob[[1]],inverse=T)
 label<-c('±0.9','±0.8','±0.7','±0.6','±0.5','±0.4') #Label for both graphs
 #Plots of best positive and negative correlations
 globalnegative<-tm_shape(Maxminglob[[1]],bbox=bbox_cal)+tm_raster(style = "cont",labels=label,palette='YlGnBu')+
-  border+tm_shape(nodataneg)+tm_raster(palette='#969696',legend.show = FALSE)+
+  tm_shape(california)+tm_borders()+tm_shape(nodataneg)+tm_raster(palette='#969696',legend.show = FALSE)+
   tm_scale_bar(breaks = c(0, 100,200,300), text.size = 1, position=c(0.0,-0.02))+
   tm_layout(legend.outside = TRUE, legend.title.color='white')
 globalpositive<-tm_shape(Maxminglob[[2]],bbox=bbox_cal)+tm_raster(style = "cont",palette='YlGnBu')+
-  border+tm_shape(nodatapos)+tm_raster(palette='#969696',legend.show = FALSE)+
+  tm_shape(california)+tm_borders()+tm_shape(nodatapos)+tm_raster(palette='#969696',legend.show = FALSE)+
   tm_compass(type = "arrow", position = c(0.0, 0.10),size=1)+
   tm_layout(legend.show = FALSE)
 
@@ -84,8 +84,8 @@ pal<-brewer.pal(n = 8, name = 'YlGnBu')
 ggplot(data=valu[[2]],aes(x=V1))+geom_histogram(bins=8,aes(y=stat(count)/sum(count)),fill=pal,colour = "black")+xlab("Values")+ylab('Frequency')+theme_minimal()
 ggplot(data=valu[[1]],aes(x=V1))+geom_histogram(bins=8,aes(y=stat(count)/sum(count)),fill=rev(pal),colour = "black")+xlab("Values")+ylab('Frequency')+theme_minimal()
 #Topics discussed in the results
-categpos<-table(cut(valu[[2]][,1], c(0.2,0.5,0.6,0.75,1)))/length(valu[[2]][,1])
-categneg<-table(cut(valu[[1]][,1], c(-0.2,-0.5,-0.6,-0.75,-1)))/length(valu[[1]][,1])
+categpos<-table(cut(valu[[2]][,1], c(0.2,0.4,0.6,0.75,1)))/length(valu[[2]][,1])
+categneg<-table(cut(valu[[1]][,1], c(-0.2,-0.4,-0.6,-0.75,-1)))/length(valu[[1]][,1])
 intersection<-mask(Maxminglob[[1]],Maxminglob[[2]])
 #############################################################################################################
 ##                            Plot of best scenarios for best correlations                                 ##   
