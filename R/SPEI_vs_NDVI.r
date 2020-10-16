@@ -7,7 +7,10 @@ library(reshape2) #Melt the data
 library(tmap) #making maps
 library(bannerCommenter) #Organizing my code
 library(dplyr) #Pipes
+library(ggmap) #get a decent basemap
+library(RColorBrewer) #Map and graph colors
 library(dunn.test)
+
 
 #############################################################################################################
 ##                          Import shapefiles and rasters for the analysis                                 ##   
@@ -16,6 +19,10 @@ library(dunn.test)
 setwd("C:/Users/ACER/Desktop/Thesis/")
 california <-st_read("ArcGIS/California.shp") #California shapefile
 ecoregions<-st_read("ArcGIS/Ecoregions Simplified/Ecocal_project.shp") #Ecoregions of California Shapefile
+
+#Functions for analysis
+setwd("C:/Users/ACER/Documents/GitHub/Thesis/R/Auxiliary Functions")
+sapply(list.files(),source)
 
 #Import map of highest negative and positive correlations -Section 4.1 of Thesis
 setwd("C:/Users/ACER/Desktop/Thesis/GEE_Exports/Maxmin - All")
@@ -51,6 +58,9 @@ bbox_cal[3] <- bbox_cal[3] + (0.05 * xrange) # xmax - right
 bbox_cal[2] <- bbox_cal[2] - (0.05 * yrange) # ymin - bottom
 bbox_cal[4] <- bbox_cal[4] + (0.05 * yrange) # ymax - top
 
+#Basemap import: It imports the basemap in as an rgb raster
+basmapcal<-basemap(c(left=-125,bottom=32,right=-113,top=43), "watercolor")
+
 #############################################################################################################
 ##                                Plot of best R values of correlations                                    ##   
 #############################################################################################################
@@ -66,12 +76,13 @@ nodataneg<- locationsneg%>%mask(california)%>%mask(Maxminglob[[1]],inverse=T)
 
 label<-c('±0.9','±0.8','±0.7','±0.6','±0.5','±0.4') #Label for both graphs
 #Plots of best positive and negative correlations
-globalnegative<-tm_shape(Maxminglob[[1]],bbox=bbox_cal)+tm_raster(style = "cont",labels=label,palette='YlGnBu')+
-  tm_shape(california)+tm_borders()+tm_shape(nodataneg)+tm_raster(palette='#969696',legend.show = FALSE)+
+globalnegative<-tm_shape(basmapcal)+tm_rgb()+tm_shape(Maxminglob[[1]],bbox=bbox_cal)+tm_raster(style = "cont",labels=label,palette='YlOrRd')+
+  tm_shape(california)+tm_borders()+
   tm_scale_bar(breaks = c(0, 100,200,300), text.size = 1, position=c(0.0,-0.02))+
   tm_layout(legend.outside = TRUE, legend.title.color='white')
-globalpositive<-tm_shape(Maxminglob[[2]],bbox=bbox_cal)+tm_raster(style = "cont",palette='YlGnBu')+
-  tm_shape(california)+tm_borders()+tm_shape(nodatapos)+tm_raster(palette='#969696',legend.show = FALSE)+
+
+globalpositive<-tm_shape(basmapcal)+tm_rgb()+tm_shape(Maxminglob[[2]],bbox=bbox_cal)+tm_raster(style = "cont",palette='YlOrRd')+
+  tm_shape(california)+tm_borders()+
   tm_compass(type = "arrow", position = c(0.0, 0.10),size=1)+
   tm_layout(legend.show = FALSE)
 
@@ -80,7 +91,7 @@ valu<-map(Maxminglob,getValues)%>%as.vector
 for (n in 1:2) {valu[[n]]<-as.data.frame(cbind(valu[[n]][complete.cases(valu[[n]])]))
   names(valu)<-c('data','data')}
 
-pal<-brewer.pal(n = 8, name = 'YlGnBu')
+pal<-brewer.pal(n = 8, name = 'YlOrRd')
 ggplot(data=valu[[2]],aes(x=V1))+geom_histogram(bins=8,aes(y=stat(count)/sum(count)),fill=pal,colour = "black")+xlab("Values")+ylab('Frequency')+theme_minimal()
 ggplot(data=valu[[1]],aes(x=V1))+geom_histogram(bins=8,aes(y=stat(count)/sum(count)),fill=rev(pal),colour = "black")+xlab("Values")+ylab('Frequency')+theme_minimal()
 #Topics discussed in the results
@@ -114,15 +125,16 @@ plot_percentage<-lapply(everything, function(n)
 #Plots of maps for best variables in each pixel of the image
 palleteval<-c('#969696','#feebe2','#fcc5c0','#fa9fb5','#f768a1','#c51b8a','#7a0177') #palette shade purple
 maps<-list()
-for (n in 1:8){maps[[n]]<-tm_shape(Maxmin[[n]],bbox=bbox_cal)+tm_raster(style = "fixed", 
+for (n in 1:8){maps[[n]]<-tm_shape(basmapcal)+tm_rgb()+tm_shape(Maxmin[[n]],bbox=bbox_cal)+tm_raster(style = "fixed", 
                       breaks=c(-2,unique(Maxmin[[n]])+1),labels = names(val[[n]]),palette =palleteval)+
   tm_shape(california)+tm_borders()+
-  if(n>4){tm_layout(legend.position=c('RIGHT','TOP'), legend.title.color='white',sepia.intensity=0.5)}
-else if(n==3){tm_compass(type = "arrow", position = c("left", "bottom"))+
-    tm_scale_bar(breaks = c(0, 100,200,300), text.size = 1, position=c("center","bottom"))+
-    tm_layout(legend.show=FALSE,sepia.intensity=0.5)}    
-else {tm_layout(legend.show=FALSE,sepia.intensity=0.5)}
+  if(n<5){tm_layout(legend.outside = T , legend.title.color='white')}
+else if(n==7){tm_compass(type = "arrow", size = 2, position = c(-0.05,0.05))+
+    tm_scale_bar(breaks = c(0, 100,200,300), text.size = 1, position=c(0.15,0))+
+    tm_layout(legend.show=FALSE)}    
+else {tm_layout(legend.show=FALSE)}
 }
+
 
 #Discussion
 disc1<-(table(valu$posNDVIM.tif==5 & valu$posSPEIL.tif==12)/val[[5]][['May']])
@@ -134,7 +146,7 @@ disc3<-(table(valu$posSPEIR.tif==1 & valu$posSPEIL.tif==12)/val[[7]][['12 m lag'
 #############################################################################################################
 banner("Unique and Common Locations")
 
-rasterplot<-getuniqueandcommon(myrasters[[2]]) #HEREIN the raster for the plot are defined, note that:
+rasterplot<-getuniqueandcommon(myrasters[[1]]) #HEREIN the raster for the plot are defined, note that:
                                                #1 = Positive raster plots; 2=Negative raster plots
 
 Nodata<-calc(stack(rasterplot[[1]]),sum,na.rm=T)  #No data is a quick fix for representing a layer of no val.
@@ -145,15 +157,17 @@ paletteunique<-rev(c('#feebe2','#fa9fb5','#f768a1','#c51b8a','#7a0177','#54278f'
 palettecommon<-c('#a1d99b','#ffffb2')         #Yellow and green
 
 plots<-list()  #Initialization of plots
+lettersorder<-c("b","a","d","c")
 for (n in 1:4){
   breaking<-values(rasterplot[[1]][[n]])%>%table%>%names%>%as.numeric #Fixed breaks according to month
   palettetot<-c(paletteunique[1:(length(breaking)-2)],palettecommon) #complete palette
   
-  plots[[n]]<-tm_shape(rasterplot[[1]][[n]],bbox=bbox_cal)+ 
+  plots[[n]]<-tm_shape(basmapcal)+tm_rgb()+
+              tm_shape(rasterplot[[1]][[n]],bbox=bbox_cal)+ 
               tm_raster(style = "fixed", breaks=c(-10,breaking+1),labels = as.character(rasterplot[[2]][[n]]$Var1),
               palette = palettetot, title=names(rasterplot[[1]][n]))+ #Raster plot
-              tm_shape(california)+tm_borders()+tm_shape(Nodata)+tm_raster(palette='#969696',legend.show = FALSE)+
-              tm_layout(legend.outside = TRUE, legend.title.color='black')+ #Auxiliary shapes
+              tm_shape(california)+tm_borders()+
+              tm_layout(legend.outside = TRUE, legend.title.color='white', title=paste(lettersorder[n],names(rasterplot[[2]][n]), sep = "- "))+ #Auxiliary shapes
               if(n==3){tm_compass(type = "arrow", position = c(0.0, 0.10),size=1)+ #Legend and adjustments
                        tm_scale_bar(breaks = c(0, 100,200,300), text.size = 1, position=c(0.0,-0.02))}
 }
@@ -230,15 +244,19 @@ ecofilteredrvector$L1<-factor(ecofilteredrvector$L1, levels=c("NDVI_Start","NDVI
 ecofilteredrvector$L2<-factor(ecofilteredrvector$L2, levels=econames)
 
 #Simplification of labels, as the whole ecoregion would be too big if printed with the figure
-loclab<-c("Sonoran","Mojave","Central", "Northern","C.Sage","C.Valley","C.Range","SB Pine-Oak", "Casc.",
+loclab<-c("i-Sonoran","ii-Mojave","iii-Central", "iv-Northern","v-C.Sage","vi-C.Valley","C.Range","vii-SB P-O", "Casc.",
           "E.Casc.","Klamath", "Nevada")
+loclab<-c("Sonoran","ii-Mojave","i-Central", "ii-Northern","iii-C.Sage","iv-C.Valley","v- C.Range","vi-SB P-O", "vii- Casc.",
+          "viii- E.Casc.","ix- Klamath", "x- Nevada")
+loclab2<-c("a- NDVI start","b- NDVI range","c- SPEI range", "d- SPEI lag")
 names(loclab)<-econames
+names(loclab2)<- c("NDVI_Start","NDVI_Range","SPEI_Range", "SPEI_lag")
 
 #Plot of everything in a facet 
 plot <- ggplot(ecofilteredrvector, aes(x=L3, y=abs(value), fill=L2)) + 
   geom_boxplot(show.legend=F, outlier.size=0,outlier.alpha = 0)+scale_fill_manual(values=paletteeco)+
   xlab("")+ylab('')+
-  facet_grid(L2~L1,scale='free_x',space='free_x', labeller=labeller(L2=loclab)) + scale_y_continuous(n.breaks=3, limits=c(0.4,0.8))+ theme_light()
+  facet_grid(L2~L1,scale='free_x',space='free_x', labeller=labeller(L2=loclab, L1=loclab2)) + scale_y_continuous(n.breaks=3, limits=c(0.4,0.8))+ theme_light()
 
 #Getting a csv file with % occupied by each scenario for each ecoregion
 ecopercentage<-melt(percentagefillecoregion)
