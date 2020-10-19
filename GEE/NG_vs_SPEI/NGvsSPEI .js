@@ -27,6 +27,8 @@ var spei_m = ee.List.sequence(speim, 12); //Needed to map SPEI
 //------------------------------------------------------------------------//
 //                             Preparation Biomass                        //
 //------------------------------------------------------------------------//
+
+////////////////////////////IF PEARSON CORRELATION//////////////////////////
 //The NG values computed in R are standardized and clamped to values
 //beetween -2 and 2
 
@@ -38,6 +40,11 @@ var biomasscorrected = biomass.map(function(image){
   return newimg.clip(roi).clamp(-2,2);
 });
 
+////////////////////////////IF KENDALL CORRELATION//////////////////////////
+//No procedure needed for Kendall as it is a rank correlation
+/*
+var biomasscorrected = ee.ImageCollection('users/felipef93/NETGrowth').map(clip);
+*/
 //------------------------------------------------------------------------//
 //                             Preparation SPEI  	                      //
 //------------------------------------------------------------------------//
@@ -129,7 +136,8 @@ var biomass_spei24m = ee.ImageCollection(yearlink.apply(biomassSet.select('b1'),
             return image.addBands(image.get('match'));
         });
 
-//Compute pearson correlation
+																 
+///////////////////////////COMPUTE PEARSON CORRELATION//////////////////////
 var corrmap1m = biomass_spei1m.reduce(ee.Reducer.pearsonsCorrelation());
 var corrmap3m = biomass_spei3m.reduce(ee.Reducer.pearsonsCorrelation());
 var corrmap6m = biomass_spei6m.reduce(ee.Reducer.pearsonsCorrelation());
@@ -137,6 +145,15 @@ var corrmap9m = biomass_spei9m.reduce(ee.Reducer.pearsonsCorrelation());
 var corrmap12m = biomass_spei12m.reduce(ee.Reducer.pearsonsCorrelation());
 var corrmap24m = biomass_spei24m.reduce(ee.Reducer.pearsonsCorrelation());
 
+///////////////////////////COMPUTE KENDALL CORRELATION//////////////////////
+/*
+var corrmap1m = biomass_spei1m.reduce(ee.Reducer.kendallsCorrelation(2));
+var corrmap3m = biomass_spei3m.reduce(ee.Reducer.kendallsCorrelation(2));
+var corrmap6m = biomass_spei6m.reduce(ee.Reducer.kendallsCorrelation(2));
+var corrmap9m = biomass_spei9m.reduce(ee.Reducer.kendallsCorrelation(2));
+var corrmap12m = biomass_spei12m.reduce(ee.Reducer.kendallsCorrelation(2));
+var corrmap24m = biomass_spei24m.reduce(ee.Reducer.kendallsCorrelation(2));		
+*/
 //------------------------------------------------------------------------//
 //                      Export the images created  	                      //
 //------------------------------------------------------------------------//
